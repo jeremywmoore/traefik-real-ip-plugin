@@ -38,21 +38,20 @@ func (r *ProxyCountRetriever) Retrieve(headers http.Header) net.IP {
 		return nil
 	}
 
-	for _, value := range headers.Values(r.Header) {
-		if value == "" {
-			continue
-		}
+	value := strings.Join(headers.Values(r.Header), ", ")
+	if value == "" {
+		return nil
+	}
 
-		list := strings.Split(value, ",")
+	list := strings.Split(value, ",")
 
-		i := len(list) - r.Count
-		if i < 0 {
-			continue
-		}
+	i := len(list) - r.Count - 1
+	if i < 0 {
+		return nil
+	}
 
-		if ip := net.ParseIP(strings.TrimSpace(list[i])); ip != nil {
-			return ip
-		}
+	if ip := net.ParseIP(strings.TrimSpace(list[i])); ip != nil {
+		return ip
 	}
 
 	return nil
@@ -64,31 +63,30 @@ type ProxyCIDRRetriever struct {
 }
 
 func (r *ProxyCIDRRetriever) Retrieve(headers http.Header) net.IP {
-	for _, value := range headers.Values(r.Header) {
-		if value == "" {
-			continue
+	value := strings.Join(headers.Values(r.Header), ", ")
+	if value == "" {
+		return nil
+	}
+
+	list := strings.Split(value, ",")
+
+	for i := len(list) - 1; i >= 0; i-- {
+		ip := net.ParseIP(strings.TrimSpace(list[i]))
+		if ip == nil {
+			break
 		}
 
-		list := strings.Split(value, ",")
+		isProxy := false
 
-		for i := len(list) - 1; i >= 0; i-- {
-			ip := net.ParseIP(strings.TrimSpace(list[i]))
-			if ip == nil {
+		for _, cidr := range r.CIDRs {
+			if cidr.Contains(ip) {
+				isProxy = true
 				break
 			}
+		}
 
-			isProxy := false
-
-			for _, cidr := range r.CIDRs {
-				if cidr.Contains(ip) {
-					isProxy = true
-					break
-				}
-			}
-
-			if !isProxy {
-				return ip
-			}
+		if !isProxy {
+			return ip
 		}
 	}
 
